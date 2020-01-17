@@ -3,22 +3,7 @@
 
 using namespace v8;
 
-struct HeapInfo {
-	size_t totalHeapSize;
-	size_t totalHeapExecutableSize;
-	size_t totalPhysicalSize;
-	size_t usedHeapSize;
-	size_t heapSizeLimit;
-	size_t totalAvailableSize;
-	size_t mallocedMemory;
-	size_t peakMallocedMemory;
-	size_t numberOfNativeContexts;
-	size_t numberOfDetachedContexts;
-};
-
 struct HeapData {
-	HeapInfo*  before;
-	HeapInfo*  after;
 	uint64_t   gcStartTime;
 	uint64_t   gcEndTime;
 	int        gctype;
@@ -38,99 +23,13 @@ class GCResponseResource : public Nan::AsyncResource {
 	Nan::Persistent<Function> callback;
 };
 
-static GCResponseResource* asnycResource;
+static GCResponseResource* asyncResource;
 
 static HeapStatistics beforeGCStats;
 uint64_t gcStartTime;
 
 static NAN_GC_CALLBACK(recordBeforeGC) {
 	gcStartTime = uv_hrtime();
-	Nan::GetHeapStatistics(&beforeGCStats);
-}
-
-static void copyHeapStats(HeapStatistics* stats, HeapInfo* info) {
-	info->totalHeapSize = stats->total_heap_size();
-	info->totalHeapExecutableSize = stats->total_heap_size_executable();
-	info->usedHeapSize = stats->used_heap_size();
-	info->heapSizeLimit = stats->heap_size_limit();
-
-	#if NODE_MODULE_VERSION >= NODE_0_12_MODULE_VERSION
-	info->totalPhysicalSize = stats->total_physical_size();
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_4_0_MODULE_VERSION
-	info->totalAvailableSize = stats->total_available_size();
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_7_0_MODULE_VERSION
-	info->mallocedMemory = stats->malloced_memory();
-	info->peakMallocedMemory = stats->peak_malloced_memory();
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_10_0_MODULE_VERSION
-	info->numberOfNativeContexts = stats->number_of_native_contexts();
-	info->numberOfDetachedContexts = stats->number_of_detached_contexts();
-	#endif
-}
-
-static void formatStats(Local<Object> obj, HeapInfo* info) {
-	Nan::Set(obj, Nan::New("totalHeapSize").ToLocalChecked(), Nan::New<Number>(info->totalHeapSize));
-	Nan::Set(obj, Nan::New("totalHeapExecutableSize").ToLocalChecked(), Nan::New<Number>(info->totalHeapExecutableSize));
-	Nan::Set(obj, Nan::New("usedHeapSize").ToLocalChecked(), Nan::New<Number>(info->usedHeapSize));
-	Nan::Set(obj, Nan::New("heapSizeLimit").ToLocalChecked(), Nan::New<Number>(info->heapSizeLimit));
-
-	#if NODE_MODULE_VERSION >= NODE_0_12_MODULE_VERSION
-	Nan::Set(obj, Nan::New("totalPhysicalSize").ToLocalChecked(), Nan::New<Number>(info->totalPhysicalSize));
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_4_0_MODULE_VERSION
-	Nan::Set(obj, Nan::New("totalAvailableSize").ToLocalChecked(), Nan::New<Number>(info->totalAvailableSize));
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_7_0_MODULE_VERSION
-	Nan::Set(obj, Nan::New("mallocedMemory").ToLocalChecked(), Nan::New<Number>(info->mallocedMemory));
-	Nan::Set(obj, Nan::New("peakMallocedMemory").ToLocalChecked(), Nan::New<Number>(info->peakMallocedMemory));
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_10_0_MODULE_VERSION
-	Nan::Set(obj, Nan::New("numberOfNativeContexts").ToLocalChecked(), Nan::New<Number>(info->numberOfNativeContexts));
-	Nan::Set(obj, Nan::New("numberOfDetachedContexts").ToLocalChecked(), Nan::New<Number>(info->numberOfDetachedContexts));
-	#endif
-}
-
-static void formatStatDiff(Local<Object> obj, HeapInfo* before, HeapInfo* after) {
-	Nan::Set(obj, Nan::New("totalHeapSize").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->totalHeapSize) - static_cast<double>(before->totalHeapSize)));
-	Nan::Set(obj, Nan::New("totalHeapExecutableSize").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->totalHeapExecutableSize) - static_cast<double>(before->totalHeapExecutableSize)));
-	Nan::Set(obj, Nan::New("usedHeapSize").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->usedHeapSize) - static_cast<double>(before->usedHeapSize)));
-	Nan::Set(obj, Nan::New("heapSizeLimit").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->heapSizeLimit) - static_cast<double>(before->heapSizeLimit)));
-
-	#if NODE_MODULE_VERSION >= NODE_0_12_MODULE_VERSION
-	Nan::Set(obj, Nan::New("totalPhysicalSize").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->totalPhysicalSize) - static_cast<double>(before->totalPhysicalSize)));
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_4_0_MODULE_VERSION
-	Nan::Set(obj, Nan::New("totalAvailableSize").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->totalAvailableSize) - static_cast<double>(before->totalAvailableSize)));
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_7_0_MODULE_VERSION
-	Nan::Set(obj, Nan::New("mallocedMemory").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->mallocedMemory) - static_cast<double>(before->mallocedMemory)));
-	Nan::Set(obj, Nan::New("peakMallocedMemory").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->peakMallocedMemory) - static_cast<double>(before->peakMallocedMemory)));
-	#endif
-
-	#if NODE_MODULE_VERSION >= NODE_10_0_MODULE_VERSION
-	Nan::Set(obj, Nan::New("numberOfNativeContexts").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->numberOfNativeContexts) - static_cast<double>(before->numberOfNativeContexts)));
-	Nan::Set(obj, Nan::New("numberOfDetachedContexts").ToLocalChecked(), Nan::New<Number>(
-		static_cast<double>(after->numberOfDetachedContexts) - static_cast<double>(before->numberOfDetachedContexts)));
-	#endif
 }
 
 static void closeCB(uv_handle_t *handle) {
@@ -161,15 +60,12 @@ static void asyncCB(uv_async_t *handle) {
 	Nan::Set(obj, Nan::New("pauseMS").ToLocalChecked(),
 		Nan::New<Number>(round((data->gcEndTime - data->gcStartTime) / 1000000.0)));
 	Nan::Set(obj, Nan::New("gctype").ToLocalChecked(), Nan::New<Number>(data->gctype));
-	Nan::Set(obj, Nan::New("before").ToLocalChecked(), beforeGCStats);
-	Nan::Set(obj, Nan::New("after").ToLocalChecked(), afterGCStats);
-	Nan::Set(obj, Nan::New("diff").ToLocalChecked(), diffStats);
 
 	Local<Value> arguments[] = {obj};
 
-	Local<Function> callback = Nan::New(asnycResource->callback);
+	Local<Function> callback = Nan::New(asyncResource->callback);
 	v8::Local<v8::Object> target = Nan::New<v8::Object>();
-	asnycResource->runInAsyncScope(target, callback, 1, arguments);
+	asyncResource->runInAsyncScope(target, callback, 1, arguments);
 
 	delete data->before;
 	delete data->after;
