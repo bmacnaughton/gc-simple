@@ -9,15 +9,10 @@
     "node": ">=6"
   },
   "scripts": {
-    "install": "node-pre-gyp install --fallback-to-build",
-    "test": "mocha --expose-gc tests",
-    "example": "node --expose-gc example.js",
-    "prepublish": "npm ls",
-    "build": "node-pre-gyp build",
-    "pretest": "npm run build",
-    "clean": "node-pre-gyp clean"
+    "rebuild": "node-gyp rebuild"
   },
   "dependencies": {
+    "bindings": "^1.5.0",
     "nan": "^2.13.2",
     "node-pre-gyp": "^0.13.0"
   },

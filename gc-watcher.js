@@ -2,16 +2,18 @@
 
 /* eslint-disable no-console */
 //const gcstats = require('bindings')('gcstats');
-const gcstats = require('./build/gcstats/v1.4.0/Release/node-v72-linux-x64/gcstats.node');
+const gcstats = require('bindings')('gcstats');
 
 const throwError = process.argv.indexOf('error') > 1;
 const callbacks = throwError || process.argv.indexOf('callbacks') > 1;
 
+const output = [];
+
 let invocationCount = 0;
 gcstats.afterGC(function (stats) {
-  //console.log(stats);
   invocationCount += 1;
-  console.log('call: ', invocationCount);
+  //console.log(stats, ',');
+  output.push(stats);
 })
 
 createObjects(5, each);
@@ -19,9 +21,9 @@ createObjects(5, each);
 //
 // helpers
 //
-
 function each () {
-  console.log('createObjects cycle ended, invocations: ', invocationCount);
+  //console.log('createObjects cycle ended, cum: ', gcstats.getCumulative());
+  output.push(Object.assign({type: 'cumulative'}, gcstats.getCumulative()));
 }
 
 function createObjects (iterations, fn = function () {}, max = 1000000) {
@@ -30,6 +32,7 @@ function createObjects (iterations, fn = function () {}, max = 1000000) {
 
   const loop = () => {
     if (iterationCount++ >= iterations) {
+      console.log(output);
       return;
     }
     const execute = () => {
@@ -39,8 +42,14 @@ function createObjects (iterations, fn = function () {}, max = 1000000) {
           for (let i = 0; i < max; i++) {
             a[i] = {i: i * i};
           }
-          fn();
-          resolve();
+          // let gc callbacks occur before calling fn and resolving. they are scheduled
+          // on another thread and need to let the event loop run before they materialize.
+          // if no setTimeout() before fn() and resolve() then the cumulative numbers appear
+          // before the individual gc callbacks.
+          setTimeout(function () {
+            fn();
+            resolve();
+          }, 1);
         }, 5);
       });
     }
