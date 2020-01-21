@@ -4,10 +4,32 @@
 
 using namespace v8;
 
+/* https://v8docs.nodesource.com/node-8.16/d4/da0/v8_8h_source.html#l06365
+ enum GCType {
+   kGCTypeScavenge = 1 << 0,
+   kGCTypeMarkSweepCompact = 1 << 1,
+   kGCTypeIncrementalMarking = 1 << 2,
+   kGCTypeProcessWeakCallbacks = 1 << 3,
+   kGCTypeAll = kGCTypeScavenge | kGCTypeMarkSweepCompact |
+                kGCTypeIncrementalMarking | kGCTypeProcessWeakCallbacks
+ };
+
+ enum GCCallbackFlags {
+   kNoGCCallbackFlags = 0,
+   kGCCallbackFlagConstructRetainedObjectInfos = 1 << 1,
+   kGCCallbackFlagForced = 1 << 2,
+   kGCCallbackFlagSynchronousPhantomCallbackProcessing = 1 << 3,
+   kGCCallbackFlagCollectAllAvailableGarbage = 1 << 4,
+   kGCCallbackFlagCollectAllExternalMemory = 1 << 5,
+   kGCCallbackScheduleIdleGarbageCollection = 1 << 6,
+ };
+ */
+
+const int maxTypeCount = kGCTypeAll + 1;
 typedef struct GCData {
 	uint64_t gcTime;
     uint64_t gcCount;
-	int gctype;
+    uint64_t typeCounts[maxTypeCount];
 } GCData_t;
 
 GCData_t raw;
@@ -19,7 +41,7 @@ bool doCallbacks = true;
 class GCResponseResource : public Nan::AsyncResource {
  public:
 	GCResponseResource(Local<Function> callback_)
-		: Nan::AsyncResource("nan:test.DelayRequest") {
+		: Nan::AsyncResource("nan:gcstats.DeferredCallback") {
 			callback.Reset(callback_);
 		}
 
@@ -55,7 +77,15 @@ static void asyncCB(uv_async_t *handle) {
           // Nan::New<Number>(static_cast<double>(data->gcTime)));
           Nan::New<Number>(data->gcTime));
 
-	Local<Value> arguments[] = {obj};
+        Local<Object> counts = Nan::New<v8::Object>();
+        for (int i = 0; i < maxTypeCount; i++) {
+          if (data->typeCounts[i] != 0) {
+            Nan::Set(counts, i, Nan::New<Number>(data->typeCounts[i]));
+          }
+        }
+        Nan::Set(obj, Nan::New("gcTypeCounts").ToLocalChecked(), counts);
+
+        Local<Value> arguments[] = {obj};
 
 	Local<Function> callback = Nan::New(asyncResource->callback);
 	v8::Local<v8::Object> target = Nan::New<v8::Object>();
@@ -77,13 +107,19 @@ NAN_GC_CALLBACK(afterGC) {
     raw.gcCount += 1;
     raw.gcTime += et;
 
+    const int index = type & kGCTypeAll;
+    raw.typeCounts[index] += 1;
+    cumulative.typeCounts[index] += 1;
+
+
+
     // keep cumulative up-to-date
     cumulative.gcCount += 1;
     cumulative.gcTime += et;
 
     // update this gc cycle's data. because count is always 1 provide
     // the raw count as it provides additional information.
-    data->gcCount = raw.gcCount;
+    *data = raw;
     data->gcTime = et;
 
 	async->data = data;
@@ -93,34 +129,24 @@ NAN_GC_CALLBACK(afterGC) {
 }
 
 static NAN_METHOD(AfterGC) {
+    // don't require a callback. the caller might just want to fetch
+    // cumulative stats from time-to-time.
 	if(info.Length() != 1 || !info[0]->IsFunction()) {
         doCallbacks = false;
-		//return Nan::ThrowError("Callback is required");
 	}
 
-    // cumulative base is data at last fetch of cumulative information.
-    cumulative_base.gcTime = 0;
-    cumulative_base.gcCount = 0;
+    // cumulative base is data at last fetch of cumulative information so
+    // the first fetch is everything before.
+    memset(&cumulative_base, 0, sizeof(cumulative_base));
+    memset(&cumulative, 0, sizeof(cumulative));
 
-    //
-    cumulative.gcTime = 0;
-    cumulative.gcCount = 0;
-
-	Local<Function> cb = Nan::To<Function>(info[0]).ToLocalChecked();
-	asyncResource = new GCResponseResource(cb);
+    Local<Function> cb = Nan::To<Function>(info[0]).ToLocalChecked();
+    asyncResource = new GCResponseResource(cb);
 
     Nan::AddGCPrologueCallback(recordBeforeGC);
 	Nan::AddGCEpilogueCallback(afterGC);
 }
 
-//static NAN_METHOD(getCumulative) {
-//  Local<Object> obj = Nan::New<Object>();
-//
-//  Nan::Set(obj, Nan::New("gcTime").ToLocalChecked(),
-//           Nan::New<Number>(static_cast<double>(data->gcTime)));
-//  Nan::Set(obj, Nan::New("gcCount").ToLocalChecked(),
-//           Nan::New<Number>(static_cast<double>(data->gcCount)));
-//}
 
 void getCumulative(const Nan::FunctionCallbackInfo<v8::Value>& info) {
   v8::Local<v8::Context> context = info.GetIsolate()->GetCurrentContext();
