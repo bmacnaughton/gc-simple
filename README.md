@@ -1,5 +1,4 @@
 # GCStats
-[![Build Status](https://travis-ci.org/dainis/node-gcstats.svg?branch=master)](https://travis-ci.org/dainis/node-gcstats) [![Build status](https://ci.appveyor.com/api/projects/status/oeu171tgxbsac88q/branch/master?svg=true)](https://ci.appveyor.com/project/dainis/node-gcstats/branch/master)
 
 Exposes stats about V8 GC after it has been executed.
 
@@ -7,67 +6,31 @@ Exposes stats about V8 GC after it has been executed.
 
 Create a new instance of the module and subscribe to `stats`-events from that:
 
-    var gc = (require('gc-stats'))();
+```js
+gcstats = require('gc-stats');
 
-    gc.on('stats', function (stats) {
-        console.log('GC happened', stats);
-    });
+gcstats.afterGC(function (stats) {
+  console.log(stats);
+})
 
-This will print blobs like this whenever a GC happened:
+// This will print information like this whenever a GC happened:
 
-    GC happened {
-      startTime: 9426055813976,
-      endTime: 9426057735390,
-      pause: 1921414,
-      pauseMS: 1,
-      gctype: 1,
-      before: {
-         totalHeapSize: 11354112,
-         totalHeapExecutableSize: 3670016,
-         usedHeapSize: 7457184,
-         heapSizeLimit: 1501560832,
-         totalPhysicalSize: 9725880,
-         totalAvailableSize: 1488434544,
-         mallocedMemory: 8192,
-         peakMallocedMemory: 1186040
-      },
-      after: {
-         totalHeapSize: 12402688,
-         totalHeapExecutableSize: 3670016,
-         usedHeapSize: 6485792,
-         heapSizeLimit: 1501560832,
-         totalPhysicalSize: 10166144,
-         totalAvailableSize: 1489388528,
-         mallocedMemory: 8192,
-         peakMallocedMemory: 1186040
-      },
-      diff: {
-         totalHeapSize: 1048576,
-         totalHeapExecutableSize: 0,
-         usedHeapSize: -971392,
-         heapSizeLimit: 0,
-         totalPhysicalSize: 440264,
-         totalAvailableSize: 953984,
-         mallocedMemory: 0,
-         peakMallocedMemory: 0
-      }
-    }
+{ gcCount: 4, gcTime: 2756555 },
+{ gcCount: 5, gcTime: 5717422 },
+{ gcCount: 6, gcTime: 5081609 },
+{ gcCount: 7, gcTime: 15052260 },
+{ gcCount: 8, gcTime: 13403539 },
+{ gcCount: 9, gcTime: 20765839 },
+{ gcCount: 10, gcTime: 27269 },
+{ gcCount: 11, gcTime: 7959755 },
+```
+
+
 
 ## Property insights
-* totalHeapSize: Number of bytes V8 has allocated for the heap. This can grow if usedHeap needs more.
-* usedHeapSize: Number of bytes in use by application data
-* total HeapExecutableSize: Number of bytes for compiled bytecode and JITed code
-* heapSizeLimit: The absolute limit the heap cannot exceed
-* totalPhysicalSize: Committed size (node 0.11+)
-* totalAvailableSize: Available heap size(node 4+)
-* startTime: Nanoseconds for start, using hrtime()
-* endTime: Nanoseconds for end, using hrtime()
-* pause: Nanoseconds from start to end of GC using hrtime()
-* pauseMS: pause expressed in milliseconds
-* mallocedMemory
-* peakMallocedMemory
-* numberOfNativeContexts
-* numberOfDetachedContexts
+* gcCount - number of times a garbage collection was performed (cumulative)
+* gcTime - nanoseconds taken by this garbage collection
+
 * gctype can have the following values([v8 source](https://github.com/nodejs/node/blob/554fa24916c5c6d052b51c5cee9556b76489b3f7/deps/v8/include/v8.h#L6137-L6144)):
   * 1: Scavenge (minor GC)
   * 2: Mark/Sweep/Compact (major GC)
