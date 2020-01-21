@@ -1,7 +1,6 @@
 'use strict';
 
 /* eslint-disable no-console */
-//const gcstats = require('bindings')('gcstats');
 const gcstats = require('bindings')('gcstats');
 
 const throwError = process.argv.indexOf('error') > 1;
@@ -9,6 +8,14 @@ const callbacks = throwError || process.argv.indexOf('callbacks') > 1;
 
 const output = [];
 
+//
+// gcTypeCounts
+//
+// 1 Scavenge
+// 2 MarkSweepCompact
+// 4 IncrementalMarking
+// 8 ProcessWeakCallbacks
+// 15
 let invocationCount = 0;
 gcstats.afterGC(function (stats) {
   invocationCount += 1;
@@ -22,7 +29,6 @@ createObjects(5, each);
 // helpers
 //
 function each () {
-  //console.log('createObjects cycle ended, cum: ', gcstats.getCumulative());
   output.push(Object.assign({type: 'cumulative'}, gcstats.getCumulative()));
 }
 
@@ -43,7 +49,7 @@ function createObjects (iterations, fn = function () {}, max = 1000000) {
             a[i] = {i: i * i};
           }
           // let gc callbacks occur before calling fn and resolving. they are scheduled
-          // on another thread and need to let the event loop run before they materialize.
+          // on another thread so the event loop must run before they materialize here.
           // if no setTimeout() before fn() and resolve() then the cumulative numbers appear
           // before the individual gc callbacks.
           setTimeout(function () {
