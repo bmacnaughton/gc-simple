@@ -1,46 +1,73 @@
-# GCStats
+# gc-minimal
 
-Exposes stats about V8 GC after it has been executed.
+Make minimal v8 garbage collection stats available via callback or polling.
 
 # Usage
 
-Create a new instance of the module and subscribe to `stats`-events from that:
+To enable polling invoke `start()`.
 
 ```js
-gcstats = require('gc-stats');
+const gcminimal = require('gc-minimal');
 
-gcstats.afterGC(function (stats) {
-  console.log(stats);
-})
+gcminimal.start();
 
-// This will print information like this whenever a GC happened:
+// when you want gc data:
 
-{ gcCount: 4, gcTime: 2756555 },
-{ gcCount: 5, gcTime: 5717422 },
-{ gcCount: 6, gcTime: 5081609 },
-{ gcCount: 7, gcTime: 15052260 },
-{ gcCount: 8, gcTime: 13403539 },
-{ gcCount: 9, gcTime: 20765839 },
-{ gcCount: 10, gcTime: 27269 },
-{ gcCount: 11, gcTime: 7959755 },
+const stats = gcminimal.getCumulative();
 ```
 
+will print information similar to:
 
+```
+{ gcCount: 2, gcTime: 2138709, gcTypeCounts: { '1': 2 } }
 
-## Property insights
+```
+
+To enable callbacks when garbage collection has completed invoke `start(callback)`.
+
+```js
+const gcminimal = require('gc-minimal');
+
+gcminimal.start(function (stats) {
+  console.log(stats);
+});
+```
+
+will print information similar to:
+
+```
+{ gcCount: 1, gcTime: 820028, gcTypeCounts: { '1': 1 } },
+{ gcCount: 2, gcTime: 989847, gcTypeCounts: { '1': 2 } },
+{ gcCount: 3, gcTime: 2807363, gcTypeCounts: { '1': 3 } },
+{ gcCount: 4, gcTime: 2930841, gcTypeCounts: { '1': 4 } },
+{ gcCount: 5, gcTime: 6149228, gcTypeCounts: { '1': 5 } },
+{ gcCount: 6, gcTime: 4569092, gcTypeCounts: { '1': 6 } },
+{ gcCount: 7, gcTime: 14181468, gcTypeCounts: { '1': 7 } },
+{ gcCount: 8, gcTime: 13296259, gcTypeCounts: { '1': 8 } },
+{ gcCount: 9, gcTime: 22442218, gcTypeCounts: { '1': 9 } },
+{ gcCount: 10, gcTime: 20099, gcTypeCounts: { '1': 9, '4': 1 } },
+{ gcCount: 11, gcTime: 7511308, gcTypeCounts: { '1': 9, '2': 1, '4': 1 } },
+
+```
+
+## Explanation of stats
 * gcCount - number of times a garbage collection was performed (cumulative)
 * gcTime - nanoseconds taken by this garbage collection
+* gcTypeCounts - counts for each value of the type argument (cumulative)
 
-* gctype can have the following values([v8 source](https://github.com/nodejs/node/blob/554fa24916c5c6d052b51c5cee9556b76489b3f7/deps/v8/include/v8.h#L6137-L6144)):
+#### gc types
   * 1: Scavenge (minor GC)
   * 2: Mark/Sweep/Compact (major GC)
   * 4: Incremental marking
   * 8: Weak/Phantom callback processing
   * 15: All
 
-# Installation
+See [v8 source](https://github.com/nodejs/node/blob/554fa24916c5c6d052b51c5cee9556b76489b3f7/deps/v8/include/v8.h#L6137-L6144) for details.
 
-    npm install gc-stats
+
+# Installation
+    npm install gc-minimal
 
 # Node version support
-node-gcstats depends on C++ extensions which are compiled when the *gc-stats* module is installed. Compatibility information can be inspected via the [Travis-CI build jobs](https://travis-ci.org/dainis/node-gcstats/).
+gc-minimal depends on a C++ extension that is compiled during installation. We maintain support
+only for node versions 8 and higher.
