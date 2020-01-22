@@ -1,7 +1,7 @@
 'use strict';
 
 /* eslint-disable no-console */
-const gcstats = require('bindings')('gcstats');
+const gcminimal = require('bindings')('gc-minimal');
 
 const throwError = process.argv.indexOf('error') > 1;
 const callbacks = throwError || process.argv.indexOf('callbacks') > 1;
@@ -17,11 +17,11 @@ const output = [];
 // 8 ProcessWeakCallbacks
 // 15
 if (callbacks) {
-  gcstats.start(function (stats) {
+  gcminimal.start(function (stats) {
     output.push(stats);
   })
 } else {
-  gcstats.start();
+  gcminimal.start();
 }
 
 createObjects(5, each);
@@ -30,7 +30,7 @@ createObjects(5, each);
 // helpers
 //
 function each () {
-  output.push(Object.assign({type: 'cumulative'}, gcstats.getCumulative()));
+  output.push(Object.assign({type: 'cumulative'}, gcminimal.getCumulative()));
 }
 
 function createObjects (iterations, fn = function () {}, max = 1000000) {

@@ -41,10 +41,10 @@ bool doCallbacks = false;
 class GCResponseResource : public Nan::AsyncResource {
  public:
 	GCResponseResource(Local<Function> callback_)
-		: Nan::AsyncResource("nan:gcstats.DeferredCallback") {
-			callback.Reset(callback_);
-		}
-
+		: Nan::AsyncResource("nan:gcminimal.DeferredCallback")
+    {
+        callback.Reset(callback_);
+    }
 	~GCResponseResource() {
 		callback.Reset();
 	}
@@ -72,7 +72,7 @@ static void asyncCB(uv_async_t *handle) {
     Local<Object> obj = Nan::New<Object>();
 
     Nan::Set(obj, Nan::New("gcCount").ToLocalChecked(),
-        Nan::New<Number>(static_cast<double>(data->gcCount)));
+        Nan::New<Number>(data->gcCount));
     Nan::Set(obj, Nan::New("gcTime").ToLocalChecked(),
         // Nan::New<Number>(static_cast<double>(data->gcTime)));
         Nan::New<Number>(data->gcTime));
@@ -152,12 +152,12 @@ void getCumulative(const Nan::FunctionCallbackInfo<v8::Value>& info) {
     v8::Local<v8::Object> obj = Nan::New<v8::Object>();
 
     uint64_t count = raw.gcCount - cumulative_base.gcCount;
-    obj->Set(context, Nan::New("gcCount").ToLocalChecked(),
-        Nan::New<Number>(static_cast<double>(count)));
+    v8::Maybe<bool> b = obj->Set(context, Nan::New("gcCount").ToLocalChecked(),
+        Nan::New<Number>(count));
 
     uint64_t time = raw.gcTime - cumulative_base.gcTime;
-    obj->Set(context, Nan::New("gcTime").ToLocalChecked(),
-        Nan::New<Number>(static_cast<double>(time)));
+    b = obj->Set(context, Nan::New("gcTime").ToLocalChecked(),
+        Nan::New<Number>(time));
 
     Local<Object> counts = Nan::New<v8::Object>();
     for (int i = 0; i < maxTypeCount; i++) {
@@ -186,4 +186,4 @@ NAN_MODULE_INIT(init) {
       Nan::GetFunction(Nan::New<FunctionTemplate>(getCumulative)).ToLocalChecked());
 }
 
-NODE_MODULE(gcstats, init)
+NODE_MODULE(gcminimal, init)
