@@ -36,7 +36,7 @@ GCData_t raw;
 GCData_t cumulative_base;
 GCData_t cumulative;
 
-bool doCallbacks = true;
+bool doCallbacks = false;
 
 class GCResponseResource : public Nan::AsyncResource {
  public:
@@ -69,23 +69,23 @@ static void asyncCB(uv_async_t *handle) {
 
 	GCData_t* data = static_cast<GCData_t*>(handle->data);
 
-	Local<Object> obj = Nan::New<Object>();
+    Local<Object> obj = Nan::New<Object>();
 
-        Nan::Set(obj, Nan::New("gcCount").ToLocalChecked(),
-		  Nan::New<Number>(static_cast<double>(data->gcCount)));
-        Nan::Set(obj, Nan::New("gcTime").ToLocalChecked(),
-          // Nan::New<Number>(static_cast<double>(data->gcTime)));
-          Nan::New<Number>(data->gcTime));
+    Nan::Set(obj, Nan::New("gcCount").ToLocalChecked(),
+        Nan::New<Number>(static_cast<double>(data->gcCount)));
+    Nan::Set(obj, Nan::New("gcTime").ToLocalChecked(),
+        // Nan::New<Number>(static_cast<double>(data->gcTime)));
+        Nan::New<Number>(data->gcTime));
 
-        Local<Object> counts = Nan::New<v8::Object>();
-        for (int i = 0; i < maxTypeCount; i++) {
-          if (data->typeCounts[i] != 0) {
-            Nan::Set(counts, i, Nan::New<Number>(data->typeCounts[i]));
-          }
+    Local<Object> counts = Nan::New<v8::Object>();
+    for (int i = 0; i < maxTypeCount; i++) {
+        if (data->typeCounts[i] != 0) {
+        Nan::Set(counts, i, Nan::New<Number>(data->typeCounts[i]));
         }
-        Nan::Set(obj, Nan::New("gcTypeCounts").ToLocalChecked(), counts);
+    }
+    Nan::Set(obj, Nan::New("gcTypeCounts").ToLocalChecked(), counts);
 
-        Local<Value> arguments[] = {obj};
+    Local<Value> arguments[] = {obj};
 
 	Local<Function> callback = Nan::New(asyncResource->callback);
 	v8::Local<v8::Object> target = Nan::New<v8::Object>();
@@ -97,10 +97,6 @@ static void asyncCB(uv_async_t *handle) {
 }
 
 NAN_GC_CALLBACK(afterGC) {
-	uv_async_t *async = new uv_async_t;
-
-	GCData_t* data = new GCData_t;
-
     uint64_t et = uv_hrtime() - gcStartTime;
 
     // keep raw up-to-date
@@ -111,37 +107,39 @@ NAN_GC_CALLBACK(afterGC) {
     raw.typeCounts[index] += 1;
     cumulative.typeCounts[index] += 1;
 
-
-
     // keep cumulative up-to-date
     cumulative.gcCount += 1;
     cumulative.gcTime += et;
 
-    // update this gc cycle's data. because count is always 1 provide
-    // the raw count as it provides additional information.
-    *data = raw;
-    data->gcTime = et;
+    if (doCallbacks) {
+        uv_async_t* async = new uv_async_t;
+        GCData_t* data = new GCData_t;
 
-	async->data = data;
+        // update this gc cycle's data. because count is always 1 provide
+        // the raw count as it provides additional information.
+        *data = raw;
+        data->gcTime = et;
 
-	uv_async_init(uv_default_loop(), async, asyncCB);
-	uv_async_send(async);
+        async->data = data;
+
+        uv_async_init(uv_default_loop(), async, asyncCB);
+        uv_async_send(async);
+    }
 }
 
-static NAN_METHOD(AfterGC) {
-    // don't require a callback. the caller might just want to fetch
-    // cumulative stats from time-to-time.
-	if(info.Length() != 1 || !info[0]->IsFunction()) {
-        doCallbacks = false;
-	}
-
+static NAN_METHOD(start) {
     // cumulative base is data at last fetch of cumulative information so
     // the first fetch is everything before.
     memset(&cumulative_base, 0, sizeof(cumulative_base));
     memset(&cumulative, 0, sizeof(cumulative));
 
-    Local<Function> cb = Nan::To<Function>(info[0]).ToLocalChecked();
-    asyncResource = new GCResponseResource(cb);
+    // don't require a callback. the caller might just want to fetch
+    // cumulative stats from time-to-time as it is far less overhead.
+	if(info.Length() == 1 || info[0]->IsFunction()) {
+        doCallbacks = true;
+        Local<Function> cb = Nan::To<Function>(info[0]).ToLocalChecked();
+        asyncResource = new GCResponseResource(cb);
+	}
 
     Nan::AddGCPrologueCallback(recordBeforeGC);
 	Nan::AddGCEpilogueCallback(afterGC);
@@ -149,27 +147,41 @@ static NAN_METHOD(AfterGC) {
 
 
 void getCumulative(const Nan::FunctionCallbackInfo<v8::Value>& info) {
-  v8::Local<v8::Context> context = info.GetIsolate()->GetCurrentContext();
-  v8::Local<v8::Object> obj = Nan::New<v8::Object>();
-  uint64_t count = raw.gcCount - cumulative_base.gcCount;
-  obj->Set(context, Nan::New("gcCount").ToLocalChecked(),
-    Nan::New<Number>(static_cast<double>(count)));
-  uint64_t time = raw.gcTime - cumulative_base.gcTime;
-  obj->Set(context, Nan::New("gcTime").ToLocalChecked(),
-    Nan::New<Number>(static_cast<double>(time)));
+    v8::Local<v8::Context> context = info.GetIsolate()->GetCurrentContext();
 
-  cumulative_base.gcCount = raw.gcCount;
-  cumulative_base.gcTime = raw.gcTime;
+    v8::Local<v8::Object> obj = Nan::New<v8::Object>();
 
-  info.GetReturnValue().Set(obj);
+    uint64_t count = raw.gcCount - cumulative_base.gcCount;
+    obj->Set(context, Nan::New("gcCount").ToLocalChecked(),
+        Nan::New<Number>(static_cast<double>(count)));
+
+    uint64_t time = raw.gcTime - cumulative_base.gcTime;
+    obj->Set(context, Nan::New("gcTime").ToLocalChecked(),
+        Nan::New<Number>(static_cast<double>(time)));
+
+    Local<Object> counts = Nan::New<v8::Object>();
+    for (int i = 0; i < maxTypeCount; i++) {
+      uint64_t count = raw.typeCounts[i] - cumulative_base.typeCounts[i];
+      if (count != 0) {
+        Nan::Set(counts, i, Nan::New<Number>(count));
+      }
+      // reset the base
+      cumulative_base.typeCounts[i] = raw.typeCounts[i];
+    }
+    Nan::Set(obj, Nan::New("gcTypeCounts").ToLocalChecked(), counts);
+
+    cumulative_base.gcCount = raw.gcCount;
+    cumulative_base.gcTime = raw.gcTime;
+
+    info.GetReturnValue().Set(obj);
 }
 
 NAN_MODULE_INIT(init) {
 	Nan::HandleScope scope;
 	//Nan::AddGCPrologueCallback(recordBeforeGC);
 
-	Nan::Set(target, Nan::New("afterGC").ToLocalChecked(),
-      Nan::GetFunction(Nan::New<FunctionTemplate>(AfterGC)).ToLocalChecked());
+	Nan::Set(target, Nan::New("start").ToLocalChecked(),
+      Nan::GetFunction(Nan::New<FunctionTemplate>(start)).ToLocalChecked());
     Nan::Set(target, Nan::New("getCumulative").ToLocalChecked(),
       Nan::GetFunction(Nan::New<FunctionTemplate>(getCumulative)).ToLocalChecked());
 }

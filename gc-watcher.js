@@ -16,12 +16,13 @@ const output = [];
 // 4 IncrementalMarking
 // 8 ProcessWeakCallbacks
 // 15
-let invocationCount = 0;
-gcstats.afterGC(function (stats) {
-  invocationCount += 1;
-  //console.log(stats, ',');
-  output.push(stats);
-})
+if (callbacks) {
+  gcstats.start(function (stats) {
+    output.push(stats);
+  })
+} else {
+  gcstats.start();
+}
 
 createObjects(5, each);
 
