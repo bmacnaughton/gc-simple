@@ -66,7 +66,7 @@ See [v8 source](https://github.com/nodejs/node/blob/554fa24916c5c6d052b51c5cee95
 
 
 # Installation
-    npm install gc-minimal
+    npm install --save gc-minimal
 
 # Node version support
 gc-minimal depends on a C++ extension that is compiled during installation. We maintain support
