@@ -162,6 +162,9 @@ static NAN_METHOD(stop) {
 
     if (enabled) {
         enabled = false;
+        memset(&raw, 0, sizeof(raw));
+        memset(&cumulative_base, 0, sizeof(cumulative_base));
+        memset(&cumulative, 0, sizeof(cumulative));
         Nan::RemoveGCPrologueCallback(recordBeforeGC);
         Nan::RemoveGCEpilogueCallback(afterGC);
     }
