@@ -71,3 +71,13 @@ See [v8 source](https://github.com/nodejs/node/blob/554fa24916c5c6d052b51c5cee95
 # Node version support
 gc-minimal depends on a C++ extension that is compiled during installation. We maintain support
 only for node versions 8 and higher.
+
+# Limitations
+gc-minimal can only be invoked once per process so it's not suitable to be embedded in most libraries.
+it will throw an exception if it `start()` is called more than once. the appoptics-apm agent for node
+uses this package so if your application might use appoptics-apm then it should not use this. removing
+this limitation is planned but not scheduled.
+
+cumulative in `getCumulative()` is a bit of a misnomer. While the `gcTime` property is cumulative
+`gcCount` and the `gcTypeCounts` are incremental since the last call to `getCumulative()`. the plan
+is to add an option to keep all counts cumulative.
