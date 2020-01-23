@@ -1,7 +1,8 @@
 'use strict';
 
 /* eslint-disable no-console */
-const gcminimal = require('bindings')('gc-minimal');
+const gcminimal = require('.');
+//const gcminimal = require('bindings')('gc-minimal');
 
 const throwError = process.argv.indexOf('error') > 1;
 const callbacks = throwError || process.argv.indexOf('callbacks') > 1;
@@ -15,16 +16,22 @@ const output = [];
 // 2 MarkSweepCompact
 // 4 IncrementalMarking
 // 8 ProcessWeakCallbacks
-// 15
+// 15 all
+let status;
 if (callbacks) {
-  gcminimal.start(function (stats) {
+  status = gcminimal.start(function (stats) {
     output.push(stats);
-  })
+  });
 } else {
-  gcminimal.start();
+  status = gcminimal.start();
 }
 
-createObjects(5, each);
+console.log(`status = ${status}`);
+
+function final () {
+  console.log(output);
+}
+createObjects(5, {each, final});
 
 //
 // helpers
@@ -33,13 +40,16 @@ function each () {
   output.push(Object.assign({type: 'cumulative'}, gcminimal.getCumulative()));
 }
 
-function createObjects (iterations, fn = function () {}, max = 1000000) {
+function createObjects (iterations, opts = {}) {
+  const final = opts.final || function () {};
+  const each = opts.each || function () {};
+  const max = opts.max || 1000000;
   const a = [];
   let iterationCount = 0;
 
   const loop = () => {
     if (iterationCount++ >= iterations) {
-      console.log(output);
+      final();
       return;
     }
     const execute = () => {
@@ -49,12 +59,12 @@ function createObjects (iterations, fn = function () {}, max = 1000000) {
           for (let i = 0; i < max; i++) {
             a[i] = {i: i * i};
           }
-          // let gc callbacks occur before calling fn and resolving. they are scheduled
+          // let gc callbacks occur before calling each and resolving. they are scheduled
           // on another thread so the event loop must run before they materialize here.
           // if no setTimeout() before fn() and resolve() then the cumulative numbers appear
           // before the individual gc callbacks.
           setTimeout(function () {
-            fn();
+            each();
             resolve();
           }, 1);
         }, 5);
