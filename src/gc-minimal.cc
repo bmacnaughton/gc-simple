@@ -37,6 +37,7 @@ GCData_t cumulative_base;
 GCData_t cumulative;
 
 bool doCallbacks = false;
+bool enabled = false;
 
 class GCResponseResource : public Nan::AsyncResource {
  public:
@@ -74,7 +75,6 @@ static void asyncCB(uv_async_t *handle) {
     Nan::Set(obj, Nan::New("gcCount").ToLocalChecked(),
         Nan::New<Number>(data->gcCount));
     Nan::Set(obj, Nan::New("gcTime").ToLocalChecked(),
-        // Nan::New<Number>(static_cast<double>(data->gcTime)));
         Nan::New<Number>(data->gcTime));
 
     Local<Object> counts = Nan::New<v8::Object>();
@@ -128,6 +128,11 @@ NAN_GC_CALLBACK(afterGC) {
 }
 
 static NAN_METHOD(start) {
+    if (enabled) {
+        Nan::ThrowError("already started");
+        return;
+    }
+    doCallbacks = false;
     // cumulative base is data at last fetch of cumulative information so
     // the first fetch is everything before.
     memset(&cumulative_base, 0, sizeof(cumulative_base));
@@ -135,14 +140,33 @@ static NAN_METHOD(start) {
 
     // don't require a callback. the caller might just want to fetch
     // cumulative stats from time-to-time as it is far less overhead.
-	if(info.Length() == 1 || info[0]->IsFunction()) {
+	if (info.Length() == 1) {
+        if (!info[0]->IsFunction()) {
+            Nan::ThrowTypeError("invalid signature");
+            return;
+        }
         doCallbacks = true;
         Local<Function> cb = Nan::To<Function>(info[0]).ToLocalChecked();
         asyncResource = new GCResponseResource(cb);
 	}
 
+    enabled = true;
     Nan::AddGCPrologueCallback(recordBeforeGC);
 	Nan::AddGCEpilogueCallback(afterGC);
+
+    info.GetReturnValue().Set(Nan::New<Number>(doCallbacks ? 2 : 1));
+}
+
+static NAN_METHOD(stop) {
+    int status = enabled ? 1 : 0;
+
+    if (enabled) {
+        enabled = false;
+        Nan::RemoveGCPrologueCallback(recordBeforeGC);
+        Nan::RemoveGCEpilogueCallback(afterGC);
+    }
+
+    info.GetReturnValue().Set(Nan::New<Number>(status));
 }
 
 
@@ -178,10 +202,12 @@ void getCumulative(const Nan::FunctionCallbackInfo<v8::Value>& info) {
 
 NAN_MODULE_INIT(init) {
 	Nan::HandleScope scope;
-	//Nan::AddGCPrologueCallback(recordBeforeGC);
 
 	Nan::Set(target, Nan::New("start").ToLocalChecked(),
       Nan::GetFunction(Nan::New<FunctionTemplate>(start)).ToLocalChecked());
+	Nan::Set(target, Nan::New("stop").ToLocalChecked(),
+      Nan::GetFunction(Nan::New<FunctionTemplate>(stop)).ToLocalChecked());
+
     Nan::Set(target, Nan::New("getCumulative").ToLocalChecked(),
       Nan::GetFunction(Nan::New<FunctionTemplate>(getCumulative)).ToLocalChecked());
 }
